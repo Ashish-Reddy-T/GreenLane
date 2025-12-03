@@ -189,7 +189,7 @@ make status         # Show container status
 
 ## Roadmap
 
-### Phase 1: Steel Thread (COMPLETE)
+### ~~Phase 1: Steel Thread (COMPLETE)~~
 - [x] gRPC telemetry ingestion
 - [x] Redis geospatial storage
 - [x] Redpanda event streaming
@@ -213,7 +213,7 @@ make status         # Show container status
 - [ ] Grafana dashboards
 - [ ] Kubernetes deployment
 
-## 📝 License
+## License
 
 MIT License
 
