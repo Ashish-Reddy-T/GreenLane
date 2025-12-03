@@ -1,0 +1,96 @@
+services:
+  # Redis - In-Memory Geospatial Store + Atomic Locking
+  redis:
+    image: redis:7-alpine
+    container_name: greenlane-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - greenlane-net
+
+  # Redpanda
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.3
+    container_name: greenlane-redpanda
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --smp 2
+      - --memory 2G
+      - --mode dev-container
+      - --default-log-level=info
+    ports:
+      - "18081:18081"  # Schema Registry
+      - "18082:18082"  # Pandaproxy
+      - "19092:19092"  # Kafka API (external)
+      - "19644:9644"   # Admin API
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - greenlane-net
+
+  # Redpanda Console - Visual UI
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.4.3
+    container_name: greenlane-console
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_SCHEMAREGISTRY_ENABLED: "true"
+      KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
+    ports:
+      - "8080:8080"
+    networks:
+      - greenlane-net
+
+  # TimescaleDB - Time-Series Database for Energy Pricing
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: greenlane-timescaledb
+    environment:
+      POSTGRES_DB: greenlane
+      POSTGRES_USER: greenlane
+      POSTGRES_PASSWORD: greenlane_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U greenlane"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - greenlane-net
+
+volumes:
+  redis-data:
+  redpanda-data:
+  timescale-data:
+
+networks:
+  greenlane-net:
+    driver: bridge
